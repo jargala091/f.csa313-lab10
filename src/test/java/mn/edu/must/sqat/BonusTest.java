@@ -78,4 +78,13 @@ class BonusTest {
     void du6_streakBrokenThenLonger() {
         assertEquals(8, DataFlowTargets.bonus(new int[]{1, 1, 0, 1, 1, 1, 1, 1, 1}, 3));
     }
+
+    // ---------------- Хэсэг C: M2 (best = present) мутацийг унагах тест ----------------
+    // Бусад тестэд best шинэчлэгдэх мөчид present ба streak тэнцүү байсан, эсвэл хоёулаа >= 5 байсан.
+    // Энд present = 5 (>= 5) боловч хамгийн урт цуваа 3 (< 5): зөв best = 3, мутант best = 5.
+    @Test
+    @DisplayName("M2K bonus([1,1,1,0,1,1],10)=0: present=5 but longest streak=3, best43->53F (kills M2)")
+    void m2k_manyDaysButShortStreaks() {
+        assertEquals(0, DataFlowTargets.bonus(new int[]{1, 1, 1, 0, 1, 1}, 10));
+    }
 }

@@ -195,3 +195,37 @@ AD1, AD2 нь 33 биелэх хосоос 26-г хамарсан. Үлдсэн 
 | DU4 | `bonus([0,0], 1)` | 0 | P11, P30 |
 | DU5 | `bonus([1,1,1,1,1], 5)` | 8 | P31 |
 | DU6 | `bonus([1,1,0,1,1,1,1,1,1], 3)` | 8 | (давхар хамралт) |
+
+## Хэсэг C — Fault seeding
+
+Мутаци бүрийг `DataFlowTargets.java` дээр шууд хийж, `mvn test`-ийн гаралтыг results/-д хадгалаад `git restore`-оор буцаасан. Мутацийг commit хийгээгүй.
+
+| № | Мутаци | Төрөл | Үр дүн (results/) | Унасан тест ба мөр |
+|---|---|---|---|---|
+| M1 | 41 мөр `streak = streak + 1;`-ийг устгах | Missing update | `Tests run: 11, Failures: 3` — **баригдсан** (mvn-test-M1.txt) | `BonusTest.ad1_streakOfFiveBelowThreshold:25 expected: <3> but was: <0>`<br>`BonusTest.du5_exactThresholdAndStreakFive:72 expected: <8> but was: <5>`<br>`BonusTest.du6_streakBrokenThenLonger:79 expected: <8> but was: <5>` |
+| M2 | `if (streak > best) best = streak;` → `best = present;` | Wrong variable | `Tests run: 11, Failures: 0` — **амьд үлдсэн** (mvn-test-M2.txt) | — |
+| M2 + M2K | M2 хэвээр, M2K тест нэмсэн | | `Tests run: 12, Failures: 1` — **баригдсан** (mvn-test-M2-kill.txt) | `BonusTest.m2k_manyDaysButShortStreaks:88 expected: <0> but was: <3>` |
+| M3 | давталтын дараа `int total = present + best;` нэмэх | Dead definition | `Tests run: 12, Failures: 0` — **амьд үлдсэн** (mvn-test-M3.txt) | — |
+
+**M1.** 41 мөр байхгүй бол streak үргэлж 0, `streak > best` хэзээ ч T болохгүй тул best = 0. Иймд best >= 5 гэж хүлээсэн AD1, DU5, DU6 гурав 3 оноогоор дутуу гарна. 41 мөрийн def-ийн хосууд (P16–P19) хамрагдсан тул алдаа шууд баригдлаа.
+
+**M2 яагаад амьд үлдэв.** M2-д best нь цуваа биш, нийт ирсэн өдрийн тоо (present) болно. Бидний тестүүдэд best шинэчлэгдэх мөчид present ба streak ихэнхдээ тэнцүү байсан: тасалгаагүй цуваа (AD2, DU5) эсвэл тасалгаа эхний цувааны дараа гарсан (AD1: `[1,1,1,1,1,0,1]`, тасалгааны өмнө present = streak = 5). DU6-д present (8) ба жинхэнэ best (6) зөрсөн ч хоёулаа >= 5 тул 53 мөрийн шийдвэр ижил гарсан. DU хос "хамрагдсан" гэдэг нь def-ээс use-д хүрсэн гэсэн үг, харин тэр утга буруу байхад үр дүн өөрчлөгдөх эсэхийг баталгаажуулдаггүй. M2-г барихын тулд present >= 5 боловч хамгийн урт цуваа < 5 байх оролт хэрэгтэй: M2K `bonus([1,1,1,0,1,1], 10)` — зөв best = 3 (оноо 0), мутант best = present = 5 (оноо 3).
+
+**M3 яагаад унагадаггүй.** `total`-ийн def (49 мөр, мутацитай файлд) ямар ч use-гүй тул DU хос үүсгэдэггүй, програмын гаралтад нөлөөлдөггүй. Тест зөвхөн ажиглагдах үр дүнг шалгадаг тул үхсэн def-ийг тестээр барих боломжгүй, javac ч анхааруулдаггүй. Үүнийг статик анализ (data-flow anomaly: "def дараа нь use-гүй") барина. VS Code (Java Language Support / Eclipse JDT) M3 идэвхтэй үед Problems панелд:
+
+```
+DataFlowTargets.java:49  Warning  The value of the local variable total is not used  (Java 536870973)
+```
+
+Үүнтэй адил SpotBugs (`DLS_DEAD_LOCAL_STORE`), PMD (`UnusedLocalVariable`), SonarLint зэрэг багаж барина.
+
+Мутацийн дараа эх код starter-тэй ижил: `git diff 2038261 HEAD -- src/main` хоосон.
+
+### B5 — JaCoCo
+
+| Файл | Tests run | BRANCH missed/covered | LINE missed/covered |
+|---|---|---|---|
+| results/jacoco-alldefs.csv (mvn-verify-alldefs.txt) | 5 | 2 / 14 | 2 / 22 |
+| results/jacoco-final.csv (mvn-verify-final.txt) | 12 | 0 / 16 | 1 / 23 |
+
+Эцсийн LINE_MISSED = 1 нь 7 мөрийн далд constructor `DataFlowTargets()`.
